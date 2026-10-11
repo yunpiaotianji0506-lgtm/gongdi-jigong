@@ -1,0 +1,9 @@
+{
+  "name": "gongdi-jigong",
+  "version": "1.0.0",
+  "private": true,
+  "description": "工地记工小助手 Android app",
+  "scripts": {"build": "echo Web assets ready"},
+  "dependencies": {"@capacitor/android": "^7.4.3", "@capacitor/core": "^7.4.3"},
+  "devDependencies": {"@capacitor/cli": "^7.4.3"}
+}

@@ -1,0 +1,6 @@
+{
+  "appId": "com.gongdi.jigong",
+  "appName": "工地记工小助手",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
