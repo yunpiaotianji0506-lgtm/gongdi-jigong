@@ -26,7 +26,11 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 5px}input,se
 <div class="panel"><h3 style="margin:0">快速记工</h3>
 <label>日期</label><input type="date" id="workDate">
 <label>工人</label><select id="workerSelect"></select>
-<div class="row"><div><label>工资方式</label><select id="wageType"><option value="daily">日工资记工</option><option value="monthly">月工资登记</option></select></div><div><label>工数</label><select id="days"><option value="1">1 工</option><option value="0.5">半工</option><option value="1.5">1.5 工</option><option value="2">2 工</option><option value="0.25">1/4 工</option></select></div><div><label id="rateLabel">日工资（元）</label><input id="rate" type="number" min="0" step="10" placeholder="日工资"></div></div>
+
+<div class="row"><div><label>工资方式</label><select id="wageType"><option value="daily">日工资记工</option><option value="monthly">月工资登记</option><option value="hourly">计时工资</option></select></div><div><label>工数</label><select id="days"><option value="1">1 工</option><option value="0.5">半工</option><option value="1.5">1.5 工</option><option value="2">2 工</option><option value="0.25">1/4 工</option></select></div><div><label id="rateLabel">日工资（元）</label><input id="rate" type="number" min="0" step="10" placeholder="日工资"></div></div>
+
+<div id="hoursRow" class="row hidden"><div><label>工作小时数</label><input id="workHours" type="number" min="0" step="0.5" placeholder="例如：8"></div></div>
+
 <div class="row"><div><label>加班小时（可不填）</label><input id="overtimeHours" type="number" min="0" step="0.5" placeholder="例如：2"></div><div><label>加班费（元）</label><input id="overtimePay" type="number" min="0" step="10" placeholder="加班费"></div></div>
 <label>工作内容（可不填）</label><input id="workNote" placeholder="例如：配管、预埋、砌墙">
 <div class="muted" id="calc" style="margin-top:10px">本次金额：¥0</div><button class="full" id="saveWork">保存这笔记工</button></div>
@@ -47,10 +51,13 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 5px}input,se
       </div>
       <div>
         <label>工资方式</label>
-        <select id="workerWageType">
-          <option value="daily">日工资</option>
-          <option value="monthly">月工资</option>
-        </select>
+       
+<select id="workerWageType">
+  <option value="daily">日工资</option>
+  <option value="monthly">月工资</option>
+  <option value="hourly">计时工资</option>
+</select>
+
       </div>
     </div>
 
@@ -100,7 +107,24 @@ function workersInProject(){return db.workers.filter(w=>w.projectId===db.activeP
 function getWorker(id){return db.workers.find(w=>w.id===id)}
 function currentWorks(){return db.works.filter(w=>w.projectId===db.activeProject)}
 function currentPayments(){return db.payments.filter(p=>p.projectId===db.activeProject)}
-function workAmount(w){return (w.wageType==='monthly'?(Number(w.rate)||0):(Number(w.days)||0)*(Number(w.rate)||0))+(Number(w.overtimePay)||0)}
+
+function workAmount(w){
+  const rate=Number(w.rate)||0;
+  const overtimePay=Number(w.overtimePay)||0;
+
+  let base=0;
+
+  if(w.wageType==='monthly'){
+    base=rate;
+  }else if(w.wageType==='hourly'){
+    base=(Number(w.hours)||0)*rate;
+  }else{
+    base=(Number(w.days)||0)*rate;
+  }
+
+  return base+overtimePay;
+}
+
 function render(){const p=project();$('projectSubtitle').textContent='当前项目：'+p.name+' · 个人本机记账';$('activeProject').innerHTML=db.projects.map(x=>`<option value="${x.id}" ${x.id===db.activeProject?'selected':''}>${esc(x.name)}</option>`).join('');const ws=currentWorks();$('totalCost').textContent=money(ws.reduce((s,w)=>s+workAmount(w),0));$('totalEntries').textContent=ws.length;
 
 const workerOptions='<option value="">请选择工人</option>'+workersInProject().map(w=>`<option value="${w.id}">${esc(w.name)}${w.trade?' · '+esc(w.trade):''}</option>`).join('');
@@ -124,11 +148,66 @@ workersInProject().forEach(w=>sums[w.id]={name:w.name,amount:0,paid:0});
 const entries=Object.entries(sums).filter(([id,s])=>s.wage||s.advance||s.paid||s.living||s.deduction);$('settlementList').innerHTML=entries.length?entries.map(([id,s])=>`<div class="item"><div class="itemtop"><div><b>${esc(s.name)}</b><div class="muted">${s.days.toFixed(2).replace(/\.00$/,'')} 工 · 含加班费应计 ${money(s.wage)}</div><div class="muted">借支 ${money(s.advance)} · 已付款 ${money(s.paid)}<br>生活费 ${money(s.living||0)} · 其他扣款 ${money(s.deduction||0)}</div></div><div class="money">${money(s.wage-s.advance-s.paid-(s.living||0)-(s.deduction||0))}</div></div><div class="muted">剩余应付</div></div>`).join(''):'<div class="empty">当前项目还没有工资记录</div>';
 $('projectList').innerHTML=db.projects.map(x=>`<div class="item"><div class="itemtop"><div><b>${esc(x.name)}</b><div class="muted">${db.works.filter(w=>w.projectId===x.id).length} 笔记工记录</div></div><div>${x.id===db.activeProject?'<span class="tag">当前项目</span>':`<button class="secondary smallbtn" onclick="switchProject('${x.id}')">切换</button>`}</div></div></div>`).join('');
 updateCalc()}
-function workItem(w){return `<div class="item"><div class="itemtop"><div><b>${esc(w.workerName)}</b> <span class="tag">${w.wageType==='monthly'?'月工资':(Number(w.days)||0)+'工'}</span><div class="muted">${esc(w.date)} · ${esc(w.note||'未填写工作内容')} · ${w.wageType==='monthly'?'月工资':'日工资'} ${money(w.rate)}${w.overtimeHours?` · 加班 ${w.overtimeHours}小时`:''}${w.overtimePay?` · 加班费 ${money(w.overtimePay)}`:''}</div></div><div style="text-align:right"><b>${money(workAmount(w))}</b><div style="display:flex;gap:5px;margin-top:5px"><button class="secondary smallbtn" onclick="editWork('${w.id}')">编辑</button><button class="danger smallbtn" onclick="deleteWork('${w.id}')">删除</button></div></div></div></div>`}
-function updateCalc(){const days=Number($('days').value)||0,rate=Number($('rate').value)||0,ot=Number($('overtimePay').value)||0;const monthly=$('wageType').value==='monthly';$('rateLabel').textContent=monthly?'月工资（元）':'日工资（元）';$('calc').textContent='本次金额：'+money((monthly?rate:days*rate)+ot)}
+
+function workItem(w){
+  const type=w.wageType||'daily';
+  const tag=type==='monthly'
+    ?'月工资'
+    :type==='hourly'
+      ?(Number(w.hours)||0)+'小时'
+      :(Number(w.days)||0)+'工';
+  const wageLabel=type==='monthly'
+    ?'月工资'
+    :type==='hourly'
+      ?'计时工资'
+      :'日工资';
+  const unitLabel=type==='hourly'?'小时单价':wageLabel;
+
+  return `<div class="item"><div class="itemtop"><div><b>${esc(w.workerName)}</b> <span class="tag">${tag}</span><div class="muted">${esc(w.date)} · ${esc(w.note||'未填写工作内容')} · ${unitLabel} ${money(w.rate)}${w.overtimeHours?` · 加班 ${w.overtimeHours}小时`:''}${w.overtimePay?` · 加班费 ${money(w.overtimePay)}`:''}</div></div><div style="text-align:right"><b>${money(workAmount(w))}</b><div style="display:flex;gap:5px;margin-top:5px"><button class="secondary smallbtn" onclick="editWork('${w.id}')">编辑</button><button class="danger smallbtn" onclick="deleteWork('${w.id}')">删除</button></div></div></div></div>`;
+}
+
+
+function updateCalc(){
+  const type=$('wageType').value;
+  const days=Number($('days').value)||0;
+  const hours=Number($('workHours').value)||0;
+  const rate=Number($('rate').value)||0;
+  const ot=Number($('overtimePay').value)||0;
+
+  const daily=type==='daily';
+  const monthly=type==='monthly';
+  const hourly=type==='hourly';
+
+  $('rateLabel').textContent=
+    daily?'日工资（元）':
+    monthly?'月工资（元）':'小时单价（元）';
+
+  $('rate').placeholder=
+    daily?'日工资':
+    monthly?'月工资':'每小时单价';
+
+  $('hoursRow').classList.toggle('hidden',!hourly);
+  $('days').parentElement.style.display=daily?'':'none';
+
+  const amount=(monthly?rate:hourly?hours*rate:days*rate)+ot;
+  $('calc').textContent='本次金额：'+money(amount);
+}
+
 $('wageType').addEventListener('change',updateCalc)
 $('activeProject').addEventListener('change',e=>{db.activeProject=e.target.value;save();render()});
-$('workerSelect').addEventListener('change',e=>{const w=getWorker(e.target.value);$('rate').value=w?.rate||'';if(w&&w.wageType)$('wageType').value=w.wageType;updateCalc()});$('workerWageType').addEventListener('change',()=>{$('workerRateLabel').textContent=$('workerWageType').value==='monthly'?'默认月工资（元）':'默认日工资（元）';$('workerRate').placeholder=$('workerWageType').value==='monthly'?'例如：9000':'例如：300'});$('days').addEventListener('change',updateCalc);$('rate').addEventListener('input',updateCalc);$('overtimePay').addEventListener('input',updateCalc);
+
+$('workerSelect').addEventListener('change',e=>{const w=getWorker(e.target.value);$('rate').value=w?.rate||'';if(w&&w.wageType)$('wageType').value=w.wageType;updateCalc()});
+$('workerWageType').addEventListener('change',()=>{
+  const type=$('workerWageType').value;
+  $('workerRateLabel').textContent=
+    type==='monthly'?'默认月工资（元）':
+    type==='hourly'?'默认小时单价（元）':'默认日工资（元）';
+  $('workerRate').placeholder=
+    type==='monthly'?'例如：9000':
+    type==='hourly'?'例如：35':'例如：300';
+});
+$('days').addEventListener('change',updateCalc);$('rate').addEventListener('input',updateCalc);$('workHours').addEventListener('input',updateCalc);$('overtimePay').addEventListener('input',updateCalc);
+
 $('addProjectBtn').onclick=()=>{const name=prompt('请输入新项目名称');if(!name||!name.trim())return;const p={id:crypto.randomUUID(),name:name.trim()};db.projects.push(p);db.activeProject=p.id;save();render();alert('新项目已添加。工人名单可以继续共用。')};
 
 $('saveWork').onclick=()=>{
@@ -179,8 +258,61 @@ $('saveWork').onclick=()=>{
 };
 
 
-$('saveWorker').onclick=()=>{
-  const name=$('workerName').value.trim();
+
+$('saveWork').onclick=()=>{
+  const worker=getWorker($('workerSelect').value);
+  if(!worker){
+    alert('请先添加或选择工人。');
+    return;
+  }
+
+  const wageType=$('wageType').value;
+  const days=Number($('days').value)||0;
+  const hours=Number($('workHours').value)||0;
+  const rate=Number($('rate').value);
+  const overtimeHours=Number($('overtimeHours').value)||0;
+  const overtimePay=Number($('overtimePay').value)||0;
+
+  if(!Number.isFinite(rate)||rate<0||overtimePay<0){
+    alert('请填写正确的工资金额');
+    return;
+  }
+
+  if(wageType==='hourly'&&hours<=0){
+    alert('请填写正确的工作小时数');
+    return;
+  }
+
+  db.works.push({
+    id:crypto.randomUUID(),
+    projectId:db.activeProject,
+    date:$('workDate').value||today(),
+    workerId:worker.id,
+    workerName:worker.name,
+    days,
+    hours,
+    wageType,
+    rate,
+    overtimeHours,
+    overtimePay,
+    note:$('workNote').value.trim()
+  });
+
+  save();
+
+  $('workNote').value='';
+  $('overtimeHours').value='';
+  $('overtimePay').value='';
+  $('workHours').value='';
+
+  render();
+
+  $('workerSelect').value='';
+  $('rate').value='';
+
+  updateCalc();
+};
+
   if(!name){
     alert('请输入工人姓名');
     return;
@@ -238,7 +370,114 @@ $('saveWorker').onclick=()=>{
 };
 
 
-window.editWorker=id=>{
+
+window.editWorker=async id=>{
+  const w=getWorker(id);
+  if(!w)return;
+
+  const name=prompt('工人姓名：',w.name);
+  if(name===null)return;
+  if(!name.trim()){
+    alert('姓名不能为空');
+    return;
+  }
+
+  const trade=prompt('工种：',w.trade||'');
+  if(trade===null)return;
+
+  const type=await new Promise(resolve=>{
+    const dlg=document.createElement('dialog');
+    dlg.style.cssText='border:0;border-radius:12px;padding:22px;width: min(85%,360px);box-shadow:0 8px 30px #0004;';
+    dlg.innerHTML=`
+      <h3 style="margin-top:0">选择工资方式</h3>
+      <select id="wageTypeChoice" style="width:100%;padding:12px;font-size:16px;margin:8px 0 18px">
+        <option value="daily">日工资</option>
+        <option value="monthly">月工资</option>
+        <option value="hourly">计时工资</option>
+      </select>
+      <div style="display:flex;gap:10px">
+        <button type="button" id="wageCancel" class="secondary" style="flex:1">取消</button>
+        <button type="button" id="wageConfirm" style="flex:1">确定</button>
+      </div>
+    `;
+
+    document.body.appendChild(dlg);
+    const select=dlg.querySelector('#wageTypeChoice');
+    select.value=['daily','monthly','hourly'].includes(w.wageType)
+      ?w.wageType:'daily';
+
+    dlg.querySelector('#wageConfirm').onclick=()=>{
+      const value=select.value;
+      dlg.close();
+      dlg.remove();
+      resolve(value);
+    };
+
+    dlg.querySelector('#wageCancel').onclick=()=>{
+      dlg.close();
+      dlg.remove();
+      resolve(null);
+    };
+
+    dlg.showModal();
+  });
+
+  if(type===null)return;
+
+  const rateLabel={
+    daily:'默认日工资（元）',
+    monthly:'默认月工资（元）',
+    hourly:'默认小时工资（元）'
+  }[type];
+
+  const rateText=prompt(rateLabel,String(w.rate??0));
+  if(rateText===null)return;
+
+  const rate=Number(rateText);
+  if(!Number.isFinite(rate)||rate<0){
+    alert('工资必须是大于或等于0的数字');
+    return;
+  }
+
+  const phone=prompt('手机号码：',w.phone||'');
+  if(phone===null)return;
+  if(phone.trim()&&!/^1\d{10}$/.test(phone.trim())){
+    alert('手机号码格式不正确');
+    return;
+  }
+
+  const idNumber=prompt('身份证号码：',w.idNumber||'');
+  if(idNumber===null)return;
+  const cleanId=idNumber.trim().toUpperCase();
+  if(cleanId&&!/^\d{17}[\dX]$/.test(cleanId)){
+    alert('身份证号码格式不正确');
+    return;
+  }
+
+  const bankAccount=prompt('银行卡号：',w.bankAccount||'');
+  if(bankAccount===null)return;
+
+  const bankName=prompt('开户银行：',w.bankName||'');
+  if(bankName===null)return;
+
+  const bankBranch=prompt('开户支行（可留空）：',w.bankBranch||'');
+  if(bankBranch===null)return;
+
+  w.name=name.trim();
+  w.trade=trade.trim();
+  w.wageType=type;
+  w.rate=rate;
+  w.phone=phone.trim();
+  w.idNumber=cleanId;
+  w.bankAccount=bankAccount.trim();
+  w.bankName=bankName.trim();
+  w.bankBranch=bankBranch.trim();
+
+  save();
+  render();
+  alert('工人资料已修改。');
+};
+
   const w=getWorker(id);
   if(!w)return;
 
@@ -312,6 +551,7 @@ window.editWorker=id=>{
 
 window.deleteWorker=id=>{if(!confirm('删除这个工人档案？历史记工不会删除。'))return;db.workers=db.workers.filter(w=>w.id!==id);save();render()};
 
+
 window.editWork = id => {
   const w = db.works.find(x => x.id === id);
   if (!w) return;
@@ -330,45 +570,43 @@ window.editWork = id => {
     <h3 style="margin:0 0 16px">修改记工记录</h3>
     <form id="editWorkForm">
       <label style="display:block;margin-bottom:5px">记工日期</label>
-      <input id="editWorkDate" type="date" required
-        style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px">
+      <input id="editWorkDate" type="date" required style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px">
 
       <label style="display:block;margin-bottom:5px">工人</label>
-      <select id="editWorkWorker" required
-        style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px"></select>
+      <select id="editWorkWorker" required style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px"></select>
 
       <label style="display:block;margin-bottom:5px">工资方式</label>
-      <select id="editWorkType"
-        style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px">
+      <select id="editWorkType" style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px">
         <option value="daily">日工资</option>
         <option value="monthly">月工资</option>
+        <option value="hourly">计时工资</option>
       </select>
 
-      <label style="display:block;margin-bottom:5px">工数（天/月数）</label>
-      <input id="editWorkDays" type="number" min="0" step="0.01" required
-        style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px">
+      <div id="editWorkDaysRow">
+        <label style="display:block;margin-bottom:5px">工数（工）</label>
+        <input id="editWorkDays" type="number" min="0" step="0.25" style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px">
+      </div>
+
+      <div id="editWorkHoursRow">
+        <label style="display:block;margin-bottom:5px">工作小时数</label>
+        <input id="editWorkHours" type="number" min="0" step="0.5" style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px">
+      </div>
 
       <label id="editWorkRateLabel" style="display:block;margin-bottom:5px">日工资（元）</label>
-      <input id="editWorkRate" type="number" min="0" step="0.01" required
-        style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px">
+      <input id="editWorkRate" type="number" min="0" step="0.01" required style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px">
 
       <label style="display:block;margin-bottom:5px">加班小时</label>
-      <input id="editWorkOvertimeHours" type="number" min="0" step="0.1" required
-        style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px">
+      <input id="editWorkOvertimeHours" type="number" min="0" step="0.1" required style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px">
 
       <label style="display:block;margin-bottom:5px">加班费（元）</label>
-      <input id="editWorkOvertimePay" type="number" min="0" step="0.01" required
-        style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px">
+      <input id="editWorkOvertimePay" type="number" min="0" step="0.01" required style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:12px">
 
       <label style="display:block;margin-bottom:5px">工作内容/备注</label>
-      <textarea id="editWorkNote" rows="3"
-        style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:16px"></textarea>
+      <textarea id="editWorkNote" rows="3" style="width:100%;box-sizing:border-box;padding:10px;margin-bottom:16px"></textarea>
 
       <div style="display:flex;gap:10px">
-        <button type="submit"
-          style="flex:1;padding:12px;background:#1677ff;color:#fff;border:0;border-radius:6px">保存修改</button>
-        <button type="button" id="editWorkCancel"
-          style="flex:1;padding:12px;background:#eee;color:#222;border:0;border-radius:6px">取消</button>
+        <button type="submit" style="flex:1;padding:12px;background:#1677ff;color:#fff;border:0;border-radius:6px">保存修改</button>
+        <button type="button" id="editWorkCancel" style="flex:1;padding:12px;background:#eee;color:#222;border:0;border-radius:6px">取消</button>
       </div>
     </form>
   `;
@@ -383,31 +621,39 @@ window.editWork = id => {
 
   dateInput.value = w.date || '';
   get('editWorkDays').value = w.days ?? 1;
+  get('editWorkHours').value = w.hours ?? 0;
   get('editWorkRate').value = w.rate ?? 0;
   get('editWorkOvertimeHours').value = w.overtimeHours ?? 0;
   get('editWorkOvertimePay').value = w.overtimePay ?? 0;
   get('editWorkNote').value = w.note || '';
-  typeSelect.value = w.wageType || 'daily';
+  typeSelect.value = ['daily', 'monthly', 'hourly'].includes(w.wageType) ? w.wageType : 'daily';
 
-  db.workers.forEach(worker => {
+  workersInProject().forEach(worker => {
     const option = document.createElement('option');
     option.value = worker.id;
     option.textContent = worker.name;
     workerSelect.appendChild(option);
   });
+
   workerSelect.value = w.workerId;
 
   if (!workerSelect.value) {
-    const matched = db.workers.find(x => x.name === w.workerName);
+    const matched = workersInProject().find(x => x.name === w.workerName);
     if (matched) workerSelect.value = matched.id;
   }
 
-  const updateRateLabel = () => {
+  const updateEditFields = () => {
+    const type = typeSelect.value;
     get('editWorkRateLabel').textContent =
-      typeSelect.value === 'monthly' ? '月工资（元）' : '日工资（元）';
+      type === 'monthly' ? '月工资（元）' :
+      type === 'hourly' ? '小时单价（元）' : '日工资（元）';
+
+    get('editWorkDaysRow').style.display = type === 'daily' ? '' : 'none';
+    get('editWorkHoursRow').style.display = type === 'hourly' ? '' : 'none';
   };
-  typeSelect.addEventListener('change', updateRateLabel);
-  updateRateLabel();
+
+  typeSelect.addEventListener('change', updateEditFields);
+  updateEditFields();
 
   get('editWorkCancel').onclick = () => modal.remove();
 
@@ -417,7 +663,8 @@ window.editWork = id => {
     const date = dateInput.value;
     const worker = db.workers.find(x => String(x.id) === workerSelect.value);
     const wageType = typeSelect.value;
-    const days = Number(get('editWorkDays').value);
+    const days = Number(get('editWorkDays').value) || 0;
+    const hours = Number(get('editWorkHours').value) || 0;
     const rate = Number(get('editWorkRate').value);
     const overtimeHours = Number(get('editWorkOvertimeHours').value);
     const overtimePay = Number(get('editWorkOvertimePay').value);
@@ -431,13 +678,17 @@ window.editWork = id => {
       alert('请选择有效的工人');
       return;
     }
-    if (!['daily', 'monthly'].includes(wageType)) {
+    if (!['daily', 'monthly', 'hourly'].includes(wageType)) {
       alert('工资方式不正确');
       return;
     }
-    if (![days, rate, overtimeHours, overtimePay].every(Number.isFinite) ||
-        days < 0 || rate < 0 || overtimeHours < 0 || overtimePay < 0) {
-      alert('工数、工资、加班小时和加班费必须填写有效的非负数字');
+    if (![days, hours, rate, overtimeHours, overtimePay].every(Number.isFinite) ||
+        days < 0 || hours < 0 || rate < 0 || overtimeHours < 0 || overtimePay < 0) {
+      alert('工数、小时数、工资和加班数据必须是有效的非负数字');
+      return;
+    }
+    if (wageType === 'hourly' && hours <= 0) {
+      alert('计时工资必须填写大于0的工作小时数');
       return;
     }
 
@@ -446,6 +697,7 @@ window.editWork = id => {
     w.workerName = worker.name;
     w.wageType = wageType;
     w.days = days;
+    w.hours = hours;
     w.rate = rate;
     w.overtimeHours = overtimeHours;
     w.overtimePay = overtimePay;
@@ -542,7 +794,7 @@ function download(name,content,type){
 }
 
 $('exportJson').onclick=()=>download('工地记工备份_'+today()+'.json',JSON.stringify(db,null,2),'application/json;charset=utf-8');
-$('exportCsv').onclick=()=>{const rows=[['项目','日期','工人','工种','工资方式','工数','工资金额','加班小时','加班费','合计金额','工作内容']];currentWorks().forEach(w=>{const p=db.projects.find(p=>p.id===w.projectId),worker=getWorker(w.workerId);rows.push([p?.name||'',w.date,w.workerName,worker?.trade||'',w.wageType==='monthly'?'月工资':'日工资',w.days,w.rate,w.overtimeHours||0,w.overtimePay||0,workAmount(w).toFixed(2),w.note||''])});const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');download('当前项目记工_'+today()+'.csv',csv,'text/csv;charset=utf-8')};
+$('exportCsv').onclick=()=>{const rows=[['项目','日期','工人','工种','工资方式','工数','工资金额','加班小时','加班费','合计金额','工作内容']];currentWorks().forEach(w=>{const p=db.projects.find(p=>p.id===w.projectId),worker=getWorker(w.workerId);rows.push([p?.name||'',w.date,w.workerName,worker?.trade||'',w.wageType==='monthly'?'月工资':w.wageType==='hourly'?'计时工资':'日工资',w.days,w.rate,w.overtimeHours||0,w.overtimePay||0,workAmount(w).toFixed(2),w.note||''])});const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');download('当前项目记工_'+today()+'.csv',csv,'text/csv;charset=utf-8')};
 $('importFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const x=JSON.parse(await f.text());if(!x.projects||!x.workers||!x.works)throw Error();if(confirm('恢复备份会覆盖当前本机数据，是否继续？')){db=x;save();render();alert('备份恢复成功')}}catch(err){alert('文件无法识别，请选择之前导出的完整 JSON 备份')}e.target.value=''};
 $('clearData').onclick=()=>{if(confirm('确定清空全部项目、工人、记工和付款数据？建议先导出备份。')&&confirm('再次确认：此操作无法撤销。')){localStorage.removeItem(KEY);db={projects:[],activeProject:'',workers:[],works:[],payments:[]};load()}};
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x===b));['home','workers','records','settle','settings'].forEach(id=>$(id).classList.toggle('hidden',id!==b.dataset.tab));if(b.dataset.tab==='records'){$('fromDate').value='';$('toDate').value='';$('filterRecords').click()}});
