@@ -32,7 +32,55 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 5px}input,se
 <div class="muted" id="calc" style="margin-top:10px">本次金额：¥0</div><button class="full" id="saveWork">保存这笔记工</button></div>
 <div class="panel"><h3 style="margin:0 0 8px">今日记工</h3><div id="todayList"></div></div>
 </section>
-<section id="workers" class="hidden"><div class="panel"><h3 style="margin-top:0">工人名单</h3><label>姓名</label><input id="workerName" placeholder="输入工人姓名"><div class="row"><div><label>工种</label><input id="workerTrade" placeholder="例如：电工、泥工"></div><div><label>工资方式</label><select id="workerWageType"><option value="daily">日工资</option><option value="monthly">月工资</option></select></div></div><label id="workerRateLabel">默认日工资（元）</label><input id="workerRate" type="number" min="0" step="10" placeholder="例如：300"><button class="full" id="saveWorker">添加工人</button></div><div class="panel"><h3 style="margin-top:0">已录入工人</h3><div id="workerList"></div></div></section>
+
+<section id="workers" class="hidden">
+  <div class="panel">
+    <h3 style="margin-top:0">工人名单</h3>
+
+    <label>姓名</label>
+    <input id="workerName" placeholder="输入工人姓名" autocomplete="off">
+
+    <div class="row">
+      <div>
+        <label>工种</label>
+        <input id="workerTrade" placeholder="例如：电工、泥工">
+      </div>
+      <div>
+        <label>工资方式</label>
+        <select id="workerWageType">
+          <option value="daily">日工资</option>
+          <option value="monthly">月工资</option>
+        </select>
+      </div>
+    </div>
+
+    <label id="workerRateLabel">默认日工资（元）</label>
+    <input id="workerRate" type="number" min="0" step="10" placeholder="例如：300">
+
+    <label>手机号码</label>
+    <input id="workerPhone" type="tel" placeholder="输入工人手机号码" autocomplete="off">
+
+    <label>身份证号码</label>
+    <input id="workerIdNumber" type="text" placeholder="输入18位身份证号码" maxlength="18" autocomplete="off" autocapitalize="off">
+
+    <label>银行卡号</label>
+    <input id="workerBankAccount" type="text" inputmode="numeric" placeholder="输入工资银行卡号" autocomplete="off">
+
+    <label>开户银行</label>
+    <input id="workerBankName" type="text" placeholder="例如：中国建设银行" autocomplete="off">
+
+    <label>开户支行（可不填）</label>
+    <input id="workerBankBranch" type="text" placeholder="输入开户支行名称" autocomplete="off">
+
+    <button class="full" id="saveWorker">添加工人</button>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">已录入工人</h3>
+    <div id="workerList"></div>
+  </div>
+</section>
+
 <section id="records" class="hidden"><div class="panel"><h3 style="margin-top:0">记工记录</h3><div class="row"><div><label>开始日期</label><input type="date" id="fromDate"></div><div><label>结束日期</label><input type="date" id="toDate"></div></div><button class="full secondary" id="filterRecords">筛选记录</button><div id="recordList" style="margin-top:8px"></div></div></section>
 <section id="settle" class="hidden"><div class="panel"><h3 style="margin-top:0">工资汇总</h3><p class="muted">按当前项目统计。借支/已付款可在下方单独登记，结算金额=应计工资+加班费−借支−已付款−生活费−其他扣款。</p><div id="settlementList"></div></div><div class="panel"><h3 style="margin-top:0">登记借支 / 已付款</h3><label>工人</label><select id="payWorker"></select><div class="row"><div><label>类型</label><select id="payType"><option value="advance">借支</option><option value="paid">已付款</option><option value="living">生活费</option><option value="deduction">其他扣款</option></select></div><div><label>金额（元）</label><input id="payAmount" type="number" min="0" step="10" placeholder="金额"></div></div><label>日期</label><input id="payDate" type="date"><label>备注</label><input id="payNote" placeholder="可不填"><button class="full" id="savePay">保存款项</button></div></section>
 <section id="settings" class="hidden"><div class="panel"><h3 style="margin-top:0">数据备份</h3><p class="muted">导出备份文件建议定期保存到手机文件或云盘。此工具的数据保存在当前浏览器中，清除浏览器数据可能导致记录丢失。</p><button class="full" id="exportJson">导出完整备份（JSON）</button><button class="full secondary" id="exportCsv">导出当前项目记工表（CSV）</button><label>恢复完整备份</label><input type="file" id="importFile" accept=".json,application/json"><button class="full danger" id="clearData">清空本机全部数据</button></div><div class="panel"><h3 style="margin-top:0">项目管理</h3><div id="projectList"></div></div></section>
@@ -48,18 +96,31 @@ function save(){localStorage.setItem(KEY,JSON.stringify(db))}
 function project(){return db.projects.find(p=>p.id===db.activeProject)}
 function money(n){return '¥'+(Number(n)||0).toLocaleString('zh-CN',{maximumFractionDigits:2})}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function workersInProject(){return db.workers}
+function workersInProject(){return db.workers.filter(w=>w.projectId===db.activeProject||!w.projectId)}
 function getWorker(id){return db.workers.find(w=>w.id===id)}
 function currentWorks(){return db.works.filter(w=>w.projectId===db.activeProject)}
 function currentPayments(){return db.payments.filter(p=>p.projectId===db.activeProject)}
 function workAmount(w){return (w.wageType==='monthly'?(Number(w.rate)||0):(Number(w.days)||0)*(Number(w.rate)||0))+(Number(w.overtimePay)||0)}
 function render(){const p=project();$('projectSubtitle').textContent='当前项目：'+p.name+' · 个人本机记账';$('activeProject').innerHTML=db.projects.map(x=>`<option value="${x.id}" ${x.id===db.activeProject?'selected':''}>${esc(x.name)}</option>`).join('');const ws=currentWorks();$('totalCost').textContent=money(ws.reduce((s,w)=>s+workAmount(w),0));$('totalEntries').textContent=ws.length;
-const workerOptions='<option value="">请选择工人</option>'+db.workers.map(w=>`<option value="${w.id}">${esc(w.name)}${w.trade?' · '+esc(w.trade):''}</option>`).join('');$('workerSelect').innerHTML=workerOptions;$('payWorker').innerHTML=workerOptions;
-if(!$('workerSelect').value&&db.workers.length){$('workerSelect').value=db.workers[0].id;$('rate').value=getWorker(db.workers[0].id)?.rate||''}
-$('workerList').innerHTML=db.workers.length?db.workers.map(w=>`<div class="item"><div class="itemtop"><div><b>${esc(w.name)}</b> <span class="tag">${esc(w.trade||'未填工种')}</span><div class="muted">默认${w.wageType==='monthly'?'月工资':'日工资'}：${money(w.rate)}</div></div><div style="display:flex;gap:6px;align-items:flex-start"><button class="secondary smallbtn" onclick="editWorker('${w.id}')">编辑</button><button class="danger smallbtn" onclick="deleteWorker('${w.id}')">删除</button></div></div></div>`).join(''):'<div class="empty">还没有工人，先添加工人名单。</div>';
+
+const workerOptions='<option value="">请选择工人</option>'+workersInProject().map(w=>`<option value="${w.id}">${esc(w.name)}${w.trade?' · '+esc(w.trade):''}</option>`).join('');
+
+
+const projectWorkers=workersInProject();
+if(!$('workerSelect').value||!projectWorkers.some(w=>w.id===$('workerSelect').value)){
+  $('workerSelect').value=projectWorkers.length?projectWorkers[0].id:'';
+}
+$('rate').value=getWorker($('workerSelect').value)?.rate||'';
+
+
+const visibleWorkers=workersInProject();
+$('workerList').innerHTML=visibleWorkers.length?visibleWorkers.map(w=>`<div class="item"><div class="itemtop"><div><b>${esc(w.name)}</b> <span class="tag">${esc(w.trade||'未填工种')}</span><div class="muted">默认${w.wageType==='monthly'?'月工资':'日工资'}：${money(w.rate)}</div><div class="muted">手机：${esc(w.phone||'未填写')}</div><div class="muted">身份证：${esc(w.idNumber||'未填写')}</div><div class="muted">银行卡：${esc(w.bankAccount||'未填写')}</div><div class="muted">开户银行：${esc(w.bankName||'未填写')}${w.bankBranch?' · '+esc(w.bankBranch):''}</div></div><div style="display:flex;gap:6px;align-items:flex-start"><button class="secondary smallbtn" onclick="editWorker('${w.id}')">编辑</button><button class="danger smallbtn" onclick="deleteWorker('${w.id}')">删除</button></div></div></div>`).join(''):'<div class="empty">当前项目还没有工人，请先添加工人名单。</div>';
+
 const todayWorks=ws.filter(w=>w.date===today());$('todayList').innerHTML=todayWorks.length?todayWorks.map(workItem).join(''):'<div class="empty">今天还没有记工记录</div>';
 $('recordList').innerHTML=ws.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(workItem).join('')||'<div class="empty">暂无记录</div>';
-const sums={};db.workers.forEach(w=>sums[w.id]={name:w.name,days:0,wage:0,advance:0,paid:0,living:0,deduction:0});ws.forEach(w=>{sums[w.workerId]??={name:w.workerName,days:0,wage:0,advance:0,paid:0,living:0,deduction:0};sums[w.workerId].days+=w.days;sums[w.workerId].wage+=workAmount(w)});currentPayments().forEach(p=>{sums[p.workerId]??={name:p.workerName,days:0,wage:0,advance:0,paid:0,living:0,deduction:0};if(p.type==='advance'||p.type==='paid'||p.type==='living'||p.type==='deduction')sums[p.workerId][p.type]=(sums[p.workerId][p.type]||0)+p.amount});
+const sums={};
+workersInProject().forEach(w=>sums[w.id]={name:w.name,amount:0,paid:0});
+;ws.forEach(w=>{sums[w.workerId]??={name:w.workerName,days:0,wage:0,advance:0,paid:0,living:0,deduction:0};sums[w.workerId].days+=w.days;sums[w.workerId].wage+=workAmount(w)});currentPayments().forEach(p=>{sums[p.workerId]??={name:p.workerName,days:0,wage:0,advance:0,paid:0,living:0,deduction:0};if(p.type==='advance'||p.type==='paid'||p.type==='living'||p.type==='deduction')sums[p.workerId][p.type]=(sums[p.workerId][p.type]||0)+p.amount});
 const entries=Object.entries(sums).filter(([id,s])=>s.wage||s.advance||s.paid||s.living||s.deduction);$('settlementList').innerHTML=entries.length?entries.map(([id,s])=>`<div class="item"><div class="itemtop"><div><b>${esc(s.name)}</b><div class="muted">${s.days.toFixed(2).replace(/\.00$/,'')} 工 · 含加班费应计 ${money(s.wage)}</div><div class="muted">借支 ${money(s.advance)} · 已付款 ${money(s.paid)}<br>生活费 ${money(s.living||0)} · 其他扣款 ${money(s.deduction||0)}</div></div><div class="money">${money(s.wage-s.advance-s.paid-(s.living||0)-(s.deduction||0))}</div></div><div class="muted">剩余应付</div></div>`).join(''):'<div class="empty">当前项目还没有工资记录</div>';
 $('projectList').innerHTML=db.projects.map(x=>`<div class="item"><div class="itemtop"><div><b>${esc(x.name)}</b><div class="muted">${db.works.filter(w=>w.projectId===x.id).length} 笔记工记录</div></div><div>${x.id===db.activeProject?'<span class="tag">当前项目</span>':`<button class="secondary smallbtn" onclick="switchProject('${x.id}')">切换</button>`}</div></div></div>`).join('');
 updateCalc()}
@@ -117,8 +178,138 @@ $('saveWork').onclick=()=>{
   updateCalc();
 };
 
-$('saveWorker').onclick=()=>{const name=$('workerName').value.trim();if(!name){alert('请输入工人姓名');return}if(db.workers.some(w=>w.name.trim()===name)){alert('这个工人已经录入，不要重复添加。');return}db.workers.push({id:crypto.randomUUID(),name,trade:$('workerTrade').value.trim(),wageType:$('workerWageType').value,rate:Number($('workerRate').value)||0});$('workerName').value='';$('workerTrade').value='';$('workerRate').value='';$('workerWageType').value='daily';$('workerRateLabel').textContent='默认日工资（元）';save();render()};
-window.editWorker=id=>{const w=getWorker(id);if(!w)return;const name=prompt('工人姓名：',w.name);if(name===null)return;if(!name.trim()){alert('姓名不能为空');return}const trade=prompt('工种：',w.trade||'');if(trade===null)return;const type=prompt('工资方式请输入 daily（日工资）或 monthly（月工资）：',w.wageType||'daily');if(type===null)return;if(!['daily','monthly'].includes(type.trim())){alert('工资方式只能输入 daily 或 monthly');return}const rateText=prompt(type.trim()==='monthly'?'默认月工资（元）：':'默认日工资（元）：',String(w.rate??0));if(rateText===null)return;const rate=Number(rateText);if(!Number.isFinite(rate)||rate<0){alert('工资必须是大于或等于0的数字');return}w.name=name.trim();w.trade=trade.trim();w.wageType=type.trim();w.rate=rate;save();render();alert('工人资料已修改。历史记工金额保持不变，新记工将使用更新后的默认工资。')};
+
+$('saveWorker').onclick=()=>{
+  const name=$('workerName').value.trim();
+  if(!name){
+    alert('请输入工人姓名');
+    return;
+  }
+
+  if(db.workers.some(w=>w.name.trim()===name)){
+    alert('这个工人已经录入，不要重复添加。');
+    return;
+  }
+
+  const phone=$('workerPhone').value.trim();
+  const idNumber=$('workerIdNumber').value.trim().toUpperCase();
+  const bankAccount=$('workerBankAccount').value.trim();
+  const bankName=$('workerBankName').value.trim();
+  const bankBranch=$('workerBankBranch').value.trim();
+
+  if(phone && !/^1\d{10}$/.test(phone)){
+    alert('请检查手机号码，或留空不填。');
+    return;
+  }
+
+  if(idNumber && !/^\d{17}[\dX]$/i.test(idNumber)){
+    alert('身份证号码格式不正确，请检查后再保存。');
+    return;
+  }
+
+  db.workers.push({
+    id:crypto.randomUUID(),
+    name,
+    trade:$('workerTrade').value.trim(),
+    wageType:$('workerWageType').value,
+    rate:Number($('workerRate').value)||0,
+    phone,
+    idNumber,
+    bankAccount,
+    bankName,
+    bankBranch,
+    projectId:db.activeProject
+  });
+
+  $('workerName').value='';
+  $('workerTrade').value='';
+  $('workerRate').value='';
+  $('workerPhone').value='';
+  $('workerIdNumber').value='';
+  $('workerBankAccount').value='';
+  $('workerBankName').value='';
+  $('workerBankBranch').value='';
+  $('workerWageType').value='daily';
+  $('workerRateLabel').textContent='默认日工资（元）';
+
+  save();
+  render();
+  alert('工人资料已保存。');
+};
+
+
+window.editWorker=id=>{
+  const w=getWorker(id);
+  if(!w)return;
+
+  const name=prompt('工人姓名：',w.name);
+  if(name===null)return;
+  if(!name.trim()){
+    alert('姓名不能为空');
+    return;
+  }
+
+  const trade=prompt('工种：',w.trade||'');
+  if(trade===null)return;
+
+  const type=prompt('工资方式请输入 daily（日工资）或 monthly（月工资）：',w.wageType||'daily');
+  if(type===null)return;
+  if(!['daily','monthly'].includes(type.trim())){
+    alert('工资方式只能输入 daily 或 monthly');
+    return;
+  }
+
+  const rateText=prompt(
+    type.trim()==='monthly'?'默认月工资（元）：':'默认日工资（元）：',
+    String(w.rate??0)
+  );
+  if(rateText===null)return;
+
+  const rate=Number(rateText);
+  if(!Number.isFinite(rate)||rate<0){
+    alert('工资必须是大于或等于0的数字');
+    return;
+  }
+
+  const phone=prompt('手机号码：',w.phone||'');
+  if(phone===null)return;
+  if(phone.trim()&&!/^1\d{10}$/.test(phone.trim())){
+    alert('手机号码格式不正确');
+    return;
+  }
+
+  const idNumber=prompt('身份证号码：',w.idNumber||'');
+  if(idNumber===null)return;
+  const cleanId=idNumber.trim().toUpperCase();
+  if(cleanId&&!/^\d{17}[\dX]$/.test(cleanId)){
+    alert('身份证号码格式不正确');
+    return;
+  }
+
+  const bankAccount=prompt('银行卡号：',w.bankAccount||'');
+  if(bankAccount===null)return;
+
+  const bankName=prompt('开户银行：',w.bankName||'');
+  if(bankName===null)return;
+
+  const bankBranch=prompt('开户支行（可留空）：',w.bankBranch||'');
+  if(bankBranch===null)return;
+
+  w.name=name.trim();
+  w.trade=trade.trim();
+  w.wageType=type.trim();
+  w.rate=rate;
+  w.phone=phone.trim();
+  w.idNumber=cleanId;
+  w.bankAccount=bankAccount.trim();
+  w.bankName=bankName.trim();
+  w.bankBranch=bankBranch.trim();
+
+  save();
+  render();
+  alert('工人资料已修改。历史记工金额保持不变，新记工将使用更新后的默认工资。');
+};
+
 window.deleteWorker=id=>{if(!confirm('删除这个工人档案？历史记工不会删除。'))return;db.workers=db.workers.filter(w=>w.id!==id);save();render()};
 
 window.editWork = id => {
