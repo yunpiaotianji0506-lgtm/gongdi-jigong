@@ -69,7 +69,54 @@ $('wageType').addEventListener('change',updateCalc)
 $('activeProject').addEventListener('change',e=>{db.activeProject=e.target.value;save();render()});
 $('workerSelect').addEventListener('change',e=>{const w=getWorker(e.target.value);$('rate').value=w?.rate||'';if(w&&w.wageType)$('wageType').value=w.wageType;updateCalc()});$('workerWageType').addEventListener('change',()=>{$('workerRateLabel').textContent=$('workerWageType').value==='monthly'?'默认月工资（元）':'默认日工资（元）';$('workerRate').placeholder=$('workerWageType').value==='monthly'?'例如：9000':'例如：300'});$('days').addEventListener('change',updateCalc);$('rate').addEventListener('input',updateCalc);$('overtimePay').addEventListener('input',updateCalc);
 $('addProjectBtn').onclick=()=>{const name=prompt('请输入新项目名称');if(!name||!name.trim())return;const p={id:crypto.randomUUID(),name:name.trim()};db.projects.push(p);db.activeProject=p.id;save();render();alert('新项目已添加。工人名单可以继续共用。')};
-$('saveWork').onclick=()=>{const worker=getWorker($('workerSelect').value);if(!worker){alert('请先添加或选择工人。');return}const wageType=$('wageType').value,days=Number($('days').value),rate=Number($('rate').value),overtimeHours=Number($('overtimeHours').value)||0,overtimePay=Number($('overtimePay').value)||0;if(!Number.isFinite(rate)||rate<0||overtimePay<0){alert('请填写正确的工资金额');return}db.works.push({id:crypto.randomUUID(),projectId:db.activeProject,date:$('workDate').value||today(),workerId:worker.id,workerName:worker.name,days,wageType,rate,overtimeHours,overtimePay,note:$('workNote').value.trim()});save();$('workNote').value='';$('overtimeHours').value='';$('overtimePay').value='';render();$('workerSelect').value=worker.id;$('rate').value=rate;updateCalc();}
+
+$('saveWork').onclick=()=>{
+  const worker=getWorker($('workerSelect').value);
+  if(!worker){
+    alert('请先添加或选择工人。');
+    return;
+  }
+
+  const wageType=$('wageType').value;
+  const days=Number($('days').value);
+  const rate=Number($('rate').value);
+  const overtimeHours=Number($('overtimeHours').value)||0;
+  const overtimePay=Number($('overtimePay').value)||0;
+
+  if(!Number.isFinite(rate)||rate<0||overtimePay<0){
+    alert('请填写正确的工资金额');
+    return;
+  }
+
+  db.works.push({
+    id:crypto.randomUUID(),
+    projectId:db.activeProject,
+    date:$('workDate').value||today(),
+    workerId:worker.id,
+    workerName:worker.name,
+    days,
+    wageType,
+    rate,
+    overtimeHours,
+    overtimePay,
+    note:$('workNote').value.trim()
+  });
+
+  save();
+
+  $('workNote').value='';
+  $('overtimeHours').value='';
+  $('overtimePay').value='';
+
+  render();
+
+  // 保存成功后，清空工人选择和工资金额，避免重复记工
+  $('workerSelect').value='';
+  $('rate').value='';
+
+  updateCalc();
+};
+
 $('saveWorker').onclick=()=>{const name=$('workerName').value.trim();if(!name){alert('请输入工人姓名');return}if(db.workers.some(w=>w.name.trim()===name)){alert('这个工人已经录入，不要重复添加。');return}db.workers.push({id:crypto.randomUUID(),name,trade:$('workerTrade').value.trim(),wageType:$('workerWageType').value,rate:Number($('workerRate').value)||0});$('workerName').value='';$('workerTrade').value='';$('workerRate').value='';$('workerWageType').value='daily';$('workerRateLabel').textContent='默认日工资（元）';save();render()};
 window.editWorker=id=>{const w=getWorker(id);if(!w)return;const name=prompt('工人姓名：',w.name);if(name===null)return;if(!name.trim()){alert('姓名不能为空');return}const trade=prompt('工种：',w.trade||'');if(trade===null)return;const type=prompt('工资方式请输入 daily（日工资）或 monthly（月工资）：',w.wageType||'daily');if(type===null)return;if(!['daily','monthly'].includes(type.trim())){alert('工资方式只能输入 daily 或 monthly');return}const rateText=prompt(type.trim()==='monthly'?'默认月工资（元）：':'默认日工资（元）：',String(w.rate??0));if(rateText===null)return;const rate=Number(rateText);if(!Number.isFinite(rate)||rate<0){alert('工资必须是大于或等于0的数字');return}w.name=name.trim();w.trade=trade.trim();w.wageType=type.trim();w.rate=rate;save();render();alert('工人资料已修改。历史记工金额保持不变，新记工将使用更新后的默认工资。')};
 window.deleteWorker=id=>{if(!confirm('删除这个工人档案？历史记工不会删除。'))return;db.workers=db.workers.filter(w=>w.id!==id);save();render()};
