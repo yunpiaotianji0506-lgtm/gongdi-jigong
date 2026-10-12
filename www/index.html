@@ -78,7 +78,85 @@ window.deleteWork=id=>{if(!confirm('确定删除这笔记工？'))return;db.work
 window.switchProject=id=>{db.activeProject=id;save();render()};
 $('savePay').onclick=()=>{const w=getWorker($('payWorker').value),amount=Number($('payAmount').value);if(!w){alert('请选择工人');return}if(!(amount>0)){alert('请输入大于0的金额');return}db.payments.push({id:crypto.randomUUID(),projectId:db.activeProject,workerId:w.id,workerName:w.name,type:$('payType').value,amount,date:$('payDate').value||today(),note:$('payNote').value.trim()});$('payAmount').value='';$('payNote').value='';save();render();alert('款项已保存')};
 $('filterRecords').onclick=()=>{const from=$('fromDate').value,to=$('toDate').value;const ws=currentWorks().filter(w=>(!from||w.date>=from)&&(!to||w.date<=to)).sort((a,b)=>b.date.localeCompare(a.date));$('recordList').innerHTML=ws.map(workItem).join('')||'<div class="empty">这个日期范围内没有记录</div>'};
-function download(name,content,type){const a=document.createElement('a'),url=URL.createObjectURL(new Blob([content],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+
+function download(name,content,type){
+  try {
+    const isAndroidWebView =
+      /; wv\)/i.test(navigator.userAgent) ||
+      (typeof window.Android !== 'undefined');
+
+    if (isAndroidWebView) {
+      const old = document.getElementById('backupFallback');
+      if (old) old.remove();
+
+      const box = document.createElement('div');
+      box.id = 'backupFallback';
+      box.style.cssText =
+        'position:fixed;inset:0;z-index:99999;background:#fff;' +
+        'padding:16px;display:flex;flex-direction:column;gap:12px;' +
+        'color:#222;';
+
+      const title = document.createElement('h3');
+      title.textContent = '备份已生成：' + name;
+
+      const tip = document.createElement('p');
+      tip.textContent =
+        '当前安卓环境未使用自动下载。请复制下面的完整内容，' +
+        '粘贴到文本编辑器，并保存为 ' + name + '。';
+
+      const area = document.createElement('textarea');
+      area.value = content;
+      area.style.cssText =
+        'width:100%;flex:1;min-height:200px;box-sizing:border-box;' +
+        'font-size:12px;';
+
+      const copy = document.createElement('button');
+      copy.textContent = '复制备份内容';
+      copy.style.cssText = 'padding:12px;font-size:16px;';
+
+      copy.onclick = async () => {
+        try {
+          area.focus();
+          area.select();
+          const ok = await navigator.clipboard?.writeText(content);
+          if (ok) {
+            alert('备份内容已复制');
+          } else if (document.execCommand('copy')) {
+            alert('备份内容已复制');
+          } else {
+            alert('请长按文本框，选择全选并复制');
+          }
+        } catch (e) {
+          area.focus();
+          area.select();
+          alert('请长按文本框，选择全选并复制');
+        }
+      };
+
+      const close = document.createElement('button');
+      close.textContent = '关闭';
+      close.style.cssText = 'padding:12px;font-size:16px;';
+      close.onclick = () => box.remove();
+
+      box.append(title, tip, area, copy, close);
+      document.body.appendChild(box);
+      return;
+    }
+
+    const blob = new Blob([content], {type});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch (err) {
+    alert('导出失败：' + (err.message || err));
+  }
+}
+
 $('exportJson').onclick=()=>download('工地记工备份_'+today()+'.json',JSON.stringify(db,null,2),'application/json;charset=utf-8');
 $('exportCsv').onclick=()=>{const rows=[['项目','日期','工人','工种','工资方式','工数','工资金额','加班小时','加班费','合计金额','工作内容']];currentWorks().forEach(w=>{const p=db.projects.find(p=>p.id===w.projectId),worker=getWorker(w.workerId);rows.push([p?.name||'',w.date,w.workerName,worker?.trade||'',w.wageType==='monthly'?'月工资':'日工资',w.days,w.rate,w.overtimeHours||0,w.overtimePay||0,workAmount(w).toFixed(2),w.note||''])});const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');download('当前项目记工_'+today()+'.csv',csv,'text/csv;charset=utf-8')};
 $('importFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const x=JSON.parse(await f.text());if(!x.projects||!x.workers||!x.works)throw Error();if(confirm('恢复备份会覆盖当前本机数据，是否继续？')){db=x;save();render();alert('备份恢复成功')}}catch(err){alert('文件无法识别，请选择之前导出的完整 JSON 备份')}e.target.value=''};
